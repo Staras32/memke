@@ -1,31 +1,40 @@
 import streamlit as st
 import requests
 
-st.title("Solana Memecoin Filter")
+MIN_LP_SOL = 50  # Tavo minimalus likvidumas eurais ar USD (pakeisk pagal poreikį)
 
 @st.cache_data(ttl=60)
 def get_data():
     url = "https://api.dexscreener.com/latest/dex/tokens/solana"
     try:
         res = requests.get(url)
+        res.raise_for_status()
         data = res.json()
-        return data.get("pairs", [])
-    except:
+        pairs = data.get("pairs", [])
+        # Tikrinam, kad tai dict ir turi liquidityUsd
+        pairs_filtered = [p for p in pairs if isinstance(p, dict) and p.get("liquidityUsd")]
+        return pairs_filtered
+    except Exception as e:
+        st.error(f"Klaida traukiant duomenis: {e}")
         return []
+
+st.title("Solana Memecoin Filter")
 
 tokens = get_data()
 
-MIN_LP_SOL = 1  # filtras: minimalus LP SOL
+filtered_tokens = []
+for t in tokens:
+    liquidity = t.get("liquidityUsd", 0)
+    if liquidity / 20 >= MIN_LP_SOL:
+        filtered_tokens.append(t)
 
-filtered = [t for t in tokens if (t.get("liquidityUsd", 0) / 20) >= MIN_LP_SOL]
-top = sorted(filtered, key=lambda x: x.get("volumeUsd", 0), reverse=True)[:10]
+st.write(f"Iš viso gauta tokenų: {len(tokens)}")
+st.write(f"Filtruotų tokenų su likvidumu > {MIN_LP_SOL * 20}: {len(filtered_tokens)}")
 
-st.write(f"Rasta {len(top)} memecoinų su LP ≥ {MIN_LP_SOL} SOL:")
+for token in filtered_tokens:
+    name = token.get("pairName", "Nežinomas")
+    liquidity = token.get("liquidityUsd", 0)
+    st.write(f"**{name}** — likvidumas: ${liquidity:,.2f}")
 
-for t in top:
-    name = t["baseToken"]["name"]
-    symbol = t["baseToken"]["symbol"]
-    lp = round(t.get("liquidityUsd", 0) / 20, 2)
-    vol = round(t.get("volumeUsd", 0), 2)
-    price = round(t.get("priceUsd", 0), 6)
-    st.write(f"**{name}** ({symbol}): LP {lp} SOL | Volume 24h: ${vol} | Price: ${price}")
+if st.button("Atnaujinti"):
+    st.experimental_rerun()
