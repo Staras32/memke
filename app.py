@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-MIN_LP_SOL = 50  # Tavo minimalus likvidumas eurais ar USD (pakeisk pagal poreikį)
+MIN_LP_SOL = 50
 
 @st.cache_data(ttl=60)
 def get_data():
@@ -10,10 +10,12 @@ def get_data():
         res = requests.get(url)
         res.raise_for_status()
         data = res.json()
-        pairs = data.get("pairs", [])
-        # Tikrinam, kad tai dict ir turi liquidityUsd
-        pairs_filtered = [p for p in pairs if isinstance(p, dict) and p.get("liquidityUsd")]
-        return pairs_filtered
+        st.write("API response data:", data)  # DEBUG: rodome visus duomenis
+        pairs = data.get("pairs")
+        if pairs is None:
+            st.error("Atsakymas neturi rakto 'pairs'")
+            return []
+        return pairs
     except Exception as e:
         st.error(f"Klaida traukiant duomenis: {e}")
         return []
@@ -24,6 +26,8 @@ tokens = get_data()
 
 filtered_tokens = []
 for t in tokens:
+    if not isinstance(t, dict):
+        continue
     liquidity = t.get("liquidityUsd", 0)
     if liquidity / 20 >= MIN_LP_SOL:
         filtered_tokens.append(t)
